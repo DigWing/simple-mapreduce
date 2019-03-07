@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: reducers
+  labels:
+    app: reducers
+spec:
+  ports:
+  - port: 8080
+    name: reducer
+  clusterIP: None
+  selector:
+    app: reducers
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: reducer
+spec:
+  serviceName: "reducers"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reducers
+  template:
+    metadata:
+      labels:
+        app: reducers
+    spec:
+      containers:
+      - name: mapreduce
+        image: temakozyrev/mapreduce:1.14
+        ports:
+        - containerPort: 8080
+          name: reducer
+        env:
+        - name: TYPE
+          value: "REDUCE"

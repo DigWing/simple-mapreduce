@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mappers
+  labels:
+    app: mappers
+spec:
+  ports:
+  - port: 8080
+    name: mapper
+  clusterIP: None
+  selector:
+    app: mappers
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mapper
+spec:
+  serviceName: "mappers"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mappers
+  template:
+    metadata:
+      labels:
+        app: mappers
+    spec:
+      containers:
+      - name: mapreduce
+        image: temakozyrev/mapreduce:1.14
+        ports:
+        - containerPort: 8080
+          name: mapper
+        env:
+        - name: TYPE
+          value: "MAP"

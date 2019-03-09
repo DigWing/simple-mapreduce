@@ -12,7 +12,8 @@ import (
 	"math"
 	"io/ioutil"
 	"fmt"
-		)
+	"sync"
+)
 
 func main() {
 	t := os.Getenv("TYPE")
@@ -40,7 +41,6 @@ func master() {
 
 		words := strings.Split(text, " ")
 
-
 		// MAPPING
 
 		mapperHost := os.Getenv("MAPPER_HOST")
@@ -61,26 +61,36 @@ func master() {
 		}
 
 		var mapping = map[string]map[string]int{}
+
+		var wgm sync.WaitGroup
+		wgm.Add(len(mapSplits))
+
 		for host, split := range mapSplits {
-			req, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:%s/map", host, os.Getenv("MAPPER_PORT")), nil)
+			go func(host string, split []string) {
+				defer wgm.Done()
 
-			q := req.URL.Query()
-			q.Add("str", strings.Join(split, " "))
-			req.URL.RawQuery = q.Encode()
+				req, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:%s/map", host, os.Getenv("MAPPER_PORT")), nil)
 
-			res, _ := client.Do(req)
-			body, _ := ioutil.ReadAll(res.Body)
-			res.Body.Close()
+				q := req.URL.Query()
+				q.Add("str", strings.Join(split, " "))
+				req.URL.RawQuery = q.Encode()
 
-			buf := bytes.NewBuffer(body)
+				res, _ := client.Do(req)
+				body, _ := ioutil.ReadAll(res.Body)
+				_ = res.Body.Close()
+
+				buf := bytes.NewBuffer(body)
 
 
-			var decodedMap map[string]int
-			decoder := gob.NewDecoder(buf)
-			decoder.Decode(&decodedMap)
+				var decodedMap map[string]int
+				decoder := gob.NewDecoder(buf)
+				_ = decoder.Decode(&decodedMap)
 
-			mapping[host] = decodedMap
+				mapping[host] = decodedMap
+			}(host, split)
 		}
+
+		wgm.Wait()
 
 		//SHUFFLING
 
@@ -122,32 +132,40 @@ func master() {
 		}
 
 
+		var wgr sync.WaitGroup
+		wgr.Add(len(reduceSplits))
+
 		var reducing = map[string]map[string]int{}
+
 		for host, split := range reduceSplits {
-			req, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:%s/reduce", host, os.Getenv("REDUCER_PORT")), nil)
+			func (host string, split map[string][]int) {
+				defer wgr.Done()
+				req, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:%s/reduce", host, os.Getenv("REDUCER_PORT")), nil)
 
-			buf := new(bytes.Buffer)
-			encoder := gob.NewEncoder(buf)
-			encoder.Encode(split)
+				buf := new(bytes.Buffer)
+				encoder := gob.NewEncoder(buf)
+				_ = encoder.Encode(split)
 
-			q := req.URL.Query()
-			q.Add("body", string(buf.Bytes()))
-			req.URL.RawQuery = q.Encode()
+				q := req.URL.Query()
+				q.Add("body", string(buf.Bytes()))
+				req.URL.RawQuery = q.Encode()
 
-			res, _ := client.Do(req)
-			body, _ := ioutil.ReadAll(res.Body)
-			res.Body.Close()
+				res, _ := client.Do(req)
+				body, _ := ioutil.ReadAll(res.Body)
+				_ = res.Body.Close()
 
-			buf = bytes.NewBuffer(body)
+				buf = bytes.NewBuffer(body)
 
 
-			var decodedReduce = map[string]int{}
-			decoder := gob.NewDecoder(buf)
-			decoder.Decode(&decodedReduce)
+				var decodedReduce = map[string]int{}
+				decoder := gob.NewDecoder(buf)
+				_ = decoder.Decode(&decodedReduce)
 
-			reducing[host] = decodedReduce
+				reducing[host] = decodedReduce
+			}(host, split)
 		}
 
+		wgr.Wait()
 
 		return json.NewEncoder(c.Response()).Encode(&reducing)
 	})
@@ -175,7 +193,7 @@ func mapper() {
 
 		buf := new(bytes.Buffer)
 		encoder := gob.NewEncoder(buf)
-		encoder.Encode(mapping)
+		_ = encoder.Encode(mapping)
 
 		return c.Blob(http.StatusOK, "application/octet-stream", buf.Bytes())
 	})
@@ -194,7 +212,7 @@ func reducer() {
 		var reduceData = map[string][]int{}
 
 		decoder := gob.NewDecoder(buf)
-		decoder.Decode(&reduceData)
+		_ = decoder.Decode(&reduceData)
 
 		var reducing = map[string]int{}
 
@@ -207,7 +225,7 @@ func reducer() {
 
 		buf = new(bytes.Buffer)
 		encoder := gob.NewEncoder(buf)
-		encoder.Encode(reducing)
+		_ = encoder.Encode(reducing)
 
 		return c.Blob(http.StatusOK, "application/octet-stream", buf.Bytes())
 	})

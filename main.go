@@ -138,7 +138,7 @@ func master() {
 		var reducing = map[string]map[string]int{}
 
 		for host, split := range reduceSplits {
-			func (host string, split map[string][]int) {
+			go func (host string, split map[string][]int) {
 				defer wgr.Done()
 				req, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:%s/reduce", host, os.Getenv("REDUCER_PORT")), nil)
 

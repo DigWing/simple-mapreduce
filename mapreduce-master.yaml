@@ -19,7 +19,7 @@ metadata:
 spec:
   containers:
   - name: mapreduce-master
-    image: temakozyrev/mapreduce:1.14
+    image: temakozyrev/mapreduce:latest
     ports:
     - containerPort: 8080
       name: mapper
